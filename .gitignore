@@ -1,6 +1,15 @@
-# Rust's output directory
+
 target
 
 # Local settings
 .soroban
 .stellar
+
+node_modules
+circuits/node_modules
+circuits/build
+*.zkey
+*.ptau
+*.wtns
+*.r1cs
+.DS_Store
