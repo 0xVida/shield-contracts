@@ -66,7 +66,7 @@ describe("Merkle Proof Circuit Tests", function () {
 
         // Export witness to check computed root
         const signals = await snarkjs.wtns.exportJson(witnessFile);
-        
+
         // Signal index 1 is output 'root'
         const computedRoot = BigInt(signals[1]);
         expect(computedRoot).to.not.equal(tree.getRoot());
