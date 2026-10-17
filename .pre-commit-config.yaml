@@ -1,0 +1,41 @@
+# Hooks run locally via `pre-commit install` and on pre-commit.ci.
+ci:
+  # pre-commit.ci runners have no Rust toolchain; cargo hooks run locally only.
+  skip: [cargo-fmt, cargo-clippy]
+  autofix_prs: true
+
+exclude: |
+  (?x)^(
+    .*/test_snapshots/.*|
+    Cargo\.lock|
+    circuits/pnpm-lock\.yaml
+  )$
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]  # keeps .zkey / .ptau out even if .gitignore is bypassed
+
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all --
+        language: system
+        types: [rust]
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --all-targets -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
