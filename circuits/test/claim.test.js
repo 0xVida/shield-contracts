@@ -4,6 +4,7 @@ const fs = require("fs");
 const snarkjs = require("snarkjs");
 const { buildPoseidon } = require("circomlibjs");
 const { MerkleTree } = require("../lib/merkleTree");
+const { computeNullifier } = require("../lib/nullifier");
 
 describe("Allocation Ownership & Claim Circuit Tests", function () {
     this.timeout(60000);
@@ -27,12 +28,12 @@ describe("Allocation Ownership & Claim Circuit Tests", function () {
         poseidon = await buildPoseidon();
         tree = await MerkleTree.create(10); // depth 10 (1024 allocations)
 
-        for (const alloc of allocations) {
+        allocations.forEach((alloc, index) => {
             const commitment = BigInt(poseidon.F.toString(poseidon([alloc.secret, alloc.amount])));
             alloc.commitment = commitment;
-            alloc.nullifierHash = BigInt(poseidon.F.toString(poseidon([alloc.secret])));
+            alloc.nullifierHash = computeNullifier(poseidon, alloc.secret, index);
             tree.insert(commitment);
-        }
+        });
     });
 
     it("should generate valid witness for legitimate allocation claim", async () => {
@@ -157,6 +158,32 @@ describe("Allocation Ownership & Claim Circuit Tests", function () {
         try {
             await snarkjs.wtns.calculate(input, wasmPath, witnessFile);
             expect.fail("Expected failure with mismatched nullifier");
+        } catch (err) {
+            expect(err.message).to.include("Assert Failed");
+        } finally {
+            if (fs.existsSync(witnessFile)) fs.unlinkSync(witnessFile);
+        }
+    });
+
+    it("should reject claim when nullifierHash is derived for a different leaf index", async () => {
+        const index = 0;
+        const alloc = allocations[index];
+        const proof = tree.getProof(index);
+
+        const input = {
+            root: proof.root.toString(),
+            nullifierHash: computeNullifier(poseidon, alloc.secret, index + 1).toString(), // Wrong index
+            recipient: recipient.toString(),
+            amount: alloc.amount.toString(),
+            secret: alloc.secret.toString(),
+            pathElements: proof.pathElements.map((x) => x.toString()),
+            pathIndices: proof.pathIndices,
+        };
+
+        const witnessFile = path.join(__dirname, "../build/witness_wrong_index_nullifier.wtns");
+        try {
+            await snarkjs.wtns.calculate(input, wasmPath, witnessFile);
+            expect.fail("Expected failure with mismatched leaf index nullifier");
         } catch (err) {
             expect(err.message).to.include("Assert Failed");
         } finally {
