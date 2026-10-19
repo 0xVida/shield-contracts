@@ -2,6 +2,7 @@ pragma circom 2.0.0;
 
 include "node_modules/circomlib/circuits/poseidon.circom";
 include "./merkle.circom";
+include "./nullifier.circom";
 
 /*
  * ClaimAllocation verifies:
@@ -51,10 +52,13 @@ template ClaimAllocation(levels) {
         merkleChecker.pathIndices[i] <== pathIndices[i];
     }
 
-    // 3. Derive Nullifier: nullifierHash = Poseidon(secret)
-    component nullifierHasher = Poseidon(1);
-    nullifierHasher.inputs[0] <== secret;
-    nullifierHash === nullifierHasher.out;
+    // 3. Derive Nullifier: nullifierHash = Poseidon(TAG, secret, leafIndex)
+    component nullifierHasher = NullifierHasher(levels);
+    nullifierHasher.secret <== secret;
+    for (var i = 0; i < levels; i++) {
+        nullifierHasher.pathIndices[i] <== pathIndices[i];
+    }
+    nullifierHash === nullifierHasher.nullifier;
 
     // 4. Recipient Authorization Binding:
     // Prevents frontrunning by binding the recipient public signal to the circuit constraints.
