@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build": "mkdir -p build && circom claim.circom --r1cs --wasm -o build && circom test_merkle.circom --r1cs --wasm -o build && circom test_nullifier.circom --r1cs --wasm -o build",
     "test": "mocha --exit test/*.test.js",
     "setup:conservation": "bash scripts/groth16-setup.sh test_conservation 13",
     "test:conservation": "mocha --exit test/conservation.test.js",

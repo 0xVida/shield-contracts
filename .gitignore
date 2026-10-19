@@ -13,3 +13,4 @@ circuits/build
 *.wtns
 *.r1cs
 .DS_Store
+*.code-workspace
