@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "mocha --exit test/*.test.js"
+    "test": "mocha --exit test/*.test.js",
+    "setup:conservation": "bash scripts/groth16-setup.sh test_conservation 13",
+    "test:conservation": "mocha --exit test/conservation.test.js",
+    "compile:conservation-main": "bash scripts/groth16-setup.sh conservation_main"
   },
   "keywords": [],
   "author": "",
