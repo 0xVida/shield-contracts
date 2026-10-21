@@ -1,0 +1,19 @@
+{
+  "description": "Recipient encoding vectors (D4): field = sha256(ScVal XDR of address) with top 3 bits cleared. Checked by circuits/test/recipient.test.js and contracts/shield-vault/src/test.rs.",
+  "vectors": [
+    {
+      "kind": "account",
+      "address": "GCFIRY65OQE7DFP5KLNS2PF2LVZMUZYJX4OZIEQ36N2IQANUB5XVYOJR",
+      "xdr": "0000001200000000000000008a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+      "field": "0x03fe25eaf84727d8c4f51d53021e0fabed96b21ed7bfd3878a3b4971d436026c",
+      "fieldDecimal": "1805979399592580219905695061913226224433366000405387232522456497279177458284"
+    },
+    {
+      "kind": "contract",
+      "address": "CABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAFNSZ",
+      "xdr": "00000012000000010202020202020202020202020202020202020202020202020202020202020202",
+      "field": "0x1c506b56987276f11f19f9686120f2e9d3ffd64927fae51e19fa8bb0511582c6",
+      "fieldDecimal": "12806848346982805931837711312015900411635685331064092607526498727414419784390"
+    }
+  ]
+}
