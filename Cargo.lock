@@ -1443,6 +1443,7 @@ dependencies = [
 name = "shield-vault"
 version = "0.0.0"
 dependencies = [
+ "serde_json",
  "soroban-sdk",
 ]
 

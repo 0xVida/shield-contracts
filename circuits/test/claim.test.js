@@ -5,6 +5,8 @@ const snarkjs = require("snarkjs");
 const { buildPoseidon } = require("circomlibjs");
 const { MerkleTree } = require("../lib/merkleTree");
 const { computeNullifier } = require("../lib/nullifier");
+const { addressToField } = require("../lib/recipient");
+const recipientVectors = require("../test-vectors/recipient.json").vectors;
 
 describe("Allocation Ownership & Claim Circuit Tests", function () {
     this.timeout(60000);
@@ -13,8 +15,10 @@ describe("Allocation Ownership & Claim Circuit Tests", function () {
     let tree;
     const wasmPath = path.join(__dirname, "../build/claim_js/claim.wasm");
 
-    // Recipient address encoded as field element
-    const recipient = BigInt("0x1234567890abcdef1234567890abcdef12345678");
+    // Real Stellar addresses encoded with the agreed D4 scheme (same values the vault computes)
+    const recipientAddress = recipientVectors[0].address; // G... account
+    const attackerStellarAddress = recipientVectors[1].address; // C... contract
+    const recipient = addressToField(recipientAddress);
 
     // Allocation allocations
     const allocations = [
@@ -245,7 +249,7 @@ describe("Allocation Ownership & Claim Circuit Tests", function () {
             );
 
             // Attacker intercepts the transaction and substitutes their own address as recipient
-            const attackerAddress = BigInt("0x9999999999999999999999999999999999999999").toString();
+            const attackerAddress = addressToField(attackerStellarAddress).toString();
             const tamperedSignals = [...publicSignals];
             // Public signal index 2 is recipient
             tamperedSignals[2] = attackerAddress;
