@@ -194,6 +194,10 @@ impl ShieldVault {
         env.storage()
             .persistent()
             .extend_ttl(&batch_key, TTL_THRESHOLD, TTL_EXTEND_TO);
+        // Keep the contract instance (verifier addresses) alive until claims start
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
 
         // 5. Interaction: pull the batch total into the vault
         TokenClient::new(&env, &token).transfer(&funder, env.current_contract_address(), &total);
@@ -274,6 +278,14 @@ impl ShieldVault {
             .extend_ttl(&nullifier_key, TTL_THRESHOLD, TTL_EXTEND_TO);
         batch.withdrawn = withdrawn;
         env.storage().persistent().set(&batch_key, &batch);
+        // Keep the batch and the contract instance (verifier addresses) alive while
+        // claims are still coming in; an archived entry would block every withdrawal
+        env.storage()
+            .persistent()
+            .extend_ttl(&batch_key, TTL_THRESHOLD, TTL_EXTEND_TO);
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
 
         // 6. Interaction: pay the recipient from the vault's balance
         TokenClient::new(&env, &batch.token).transfer(

@@ -602,3 +602,67 @@ fn recipient_encoding_matches_shared_vectors() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Storage TTL
+// ---------------------------------------------------------------------------
+
+#[test]
+fn withdraw_extends_batch_and_instance_ttl() {
+    use soroban_sdk::testutils::{
+        storage::{Instance as _, Persistent as _},
+        Ledger as _,
+    };
+
+    let s = setup();
+    let ttls = |s: &Setup| {
+        s.env.as_contract(&s.vault.address, || {
+            (
+                s.env
+                    .storage()
+                    .persistent()
+                    .get_ttl(&DataKey::Batch(BATCH_ID)),
+                s.env.storage().instance().get_ttl(),
+            )
+        })
+    };
+
+    // First claim: the instance is at the full period
+    s.vault.withdraw(
+        &BATCH_ID,
+        &proof(&s.env),
+        &nullifier(&s.env, 1),
+        &Address::generate(&s.env),
+        &1_000,
+    );
+    assert_eq!(ttls(&s).1, TTL_EXTEND_TO);
+
+    // Much later, both entries have dropped below the threshold...
+    let elapsed = TTL_EXTEND_TO - TTL_THRESHOLD + 1;
+    s.env
+        .ledger()
+        .set_sequence_number(s.env.ledger().sequence() + elapsed);
+    assert!(ttls(&s).0 < TTL_THRESHOLD);
+
+    // ...and the next claim extends them back to the full period
+    s.vault.withdraw(
+        &BATCH_ID,
+        &proof(&s.env),
+        &nullifier(&s.env, 2),
+        &Address::generate(&s.env),
+        &1_000,
+    );
+    assert_eq!(ttls(&s), (TTL_EXTEND_TO, TTL_EXTEND_TO));
+}
+
+#[test]
+fn fund_batch_extends_instance_ttl() {
+    use soroban_sdk::testutils::storage::Instance as _;
+
+    // setup() funds the batch; the instance starts at the network minimum
+    let s = setup();
+    let ttl = s
+        .env
+        .as_contract(&s.vault.address, || s.env.storage().instance().get_ttl());
+    assert_eq!(ttl, TTL_EXTEND_TO);
+}
