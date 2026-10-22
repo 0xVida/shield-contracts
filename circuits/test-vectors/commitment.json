@@ -1,0 +1,53 @@
+{
+  "description": "Allocation commitment vectors: commitment = Poseidon(amount, secret, batchId), circomlib parameters over BN254. Inputs are decimal strings; the commitment is given as 32-byte big-endian hex and as decimal. Produced by circuits/scripts/generate-test-vectors.js and checked by circuits/test/vectors.test.js.",
+  "vectors": [
+    {
+      "name": "small values",
+      "amount": "50",
+      "secret": "111111111",
+      "batchId": "42",
+      "commitment": "0x0e67aa0b8b9804f397d012651c43c8eede8a5f0d477093463e206267fe89e12b",
+      "commitmentDecimal": "6515538735977216429592511601745733699737188409616766076726355610024744182059"
+    },
+    {
+      "name": "zero amount",
+      "amount": "0",
+      "secret": "111111111",
+      "batchId": "42",
+      "commitment": "0x07bff4fa7c6aee2dd137762e661e281178cd26170143043600d914f882e9197d",
+      "commitmentDecimal": "3505348508653532587311953792833314457559975906462722253556019814937645357437"
+    },
+    {
+      "name": "largest amount (2^64 - 1)",
+      "amount": "18446744073709551615",
+      "secret": "111111111",
+      "batchId": "42",
+      "commitment": "0x18b56a5ed7be2ff0fba8128353ebeb1c7108b19674d896cafc1a9e68903a7c60",
+      "commitmentDecimal": "11176041826791408610511614789252718127614692679494742599257915825641242655840"
+    },
+    {
+      "name": "largest batch id (2^64 - 1)",
+      "amount": "50",
+      "secret": "111111111",
+      "batchId": "18446744073709551615",
+      "commitment": "0x2094c30b4acaba2474712ed502b5072838cd412adba719857abecda98d78209b",
+      "commitmentDecimal": "14736850665225269490245288537375808755794448643636922190731870921693062504603"
+    },
+    {
+      "name": "largest secret (p - 1)",
+      "amount": "50",
+      "secret": "21888242871839275222246405745257275088548364400416034343698204186575808495616",
+      "batchId": "42",
+      "commitment": "0x0a875fe8609ea451b6e5f97ef584bb817c979acf29669363d62fde72dabef88e",
+      "commitmentDecimal": "4762314770363559131700056236389515084824531119402328103089853968848877713550"
+    },
+    {
+      "name": "248-bit secret, like generateSecret()",
+      "amount": "2500",
+      "secret": "189855338729543752940082719582767125844295116985445321106622421746716595751",
+      "batchId": "7",
+      "commitment": "0x2be1c4996f41637d4d4e6d481da4db90724f231f49ad9a56dc50db3ef2f3893f",
+      "commitmentDecimal": "19848349957527965896425368816321351187438788007939808786430524657791881414975"
+    }
+  ]
+}

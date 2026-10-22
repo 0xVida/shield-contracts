@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const { buildPoseidon } = require("circomlibjs");
 const snarkjs = require("snarkjs");
 const { MerkleTree } = require("./merkleTree");
@@ -8,6 +9,9 @@ const FIELD_SIZE = 2188824287183927522224640574525727508854836440041603434369820
 
 // Shared spec (architecture.md): amounts are token base units, range-checked to 64 bits.
 const MAX_AMOUNT = (1n << 64n) - 1n;
+
+// The vault stores batches under a u64 id, and the proof's batchId must be that same id.
+const MAX_BATCH_ID = (1n << 64n) - 1n;
 
 let poseidonPromise;
 
@@ -28,8 +32,21 @@ async function allocationCommitment(amount, secret, batchId) {
 }
 
 /**
+ * Returns a fresh secret for one allocation, from a cryptographically secure source.
+ *
+ * The secret hides the amount and proves ownership at claim time. Each recipient's Merkle path
+ * includes a neighbouring commitment, so a guessable secret would let them brute-force that
+ * neighbour's amount. Never derive secrets from predictable data, and never give two recipients
+ * the same one. 31 random bytes (248 bits) always fit below FIELD_SIZE.
+ */
+function generateSecret() {
+    return BigInt("0x" + crypto.randomBytes(31).toString("hex"));
+}
+
+/**
  * Builds the input for the conservation circuit after checking every allocation the way the
- * circuit will: amounts must fit in 64 bits, and secrets and the batch ID must be field elements.
+ * circuit will: amounts must fit in 64 bits and secrets must be field elements. The batch ID
+ * must also fit in a u64, the vault's batch id type, or the batch could never be registered.
  *
  * allocations: [{ amount, secret }] in tree order; empty slots are filled in automatically.
  * depth: tree depth of the compiled circuit (10 in production, 3 in tests).
@@ -38,7 +55,10 @@ async function allocationCommitment(amount, secret, batchId) {
  * public values the vault stores for the batch.
  */
 async function buildConservationInput({ allocations, batchId, depth }) {
-    checkFieldElement("batchId", BigInt(batchId));
+    const id = BigInt(batchId);
+    if (id < 0n || id > MAX_BATCH_ID) {
+        throw new RangeError(`batchId ${id} does not fit in a u64, the vault's batch id type`);
+    }
     allocations.forEach(({ amount, secret }, i) => {
         const value = BigInt(amount);
         if (value < 0n || value > MAX_AMOUNT) {
@@ -116,7 +136,9 @@ async function verifyConservation(verificationKey, publicSignals, proof) {
 module.exports = {
     FIELD_SIZE,
     MAX_AMOUNT,
+    MAX_BATCH_ID,
     allocationCommitment,
+    generateSecret,
     buildConservationInput,
     buildConservationInputUnchecked,
     proveConservation,
