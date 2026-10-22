@@ -3,7 +3,7 @@
 //! recipients who prove ownership of an allocation with a zero-knowledge proof.
 //!
 //! Ownership (see shield-platform/docs/team.md):
-//! - Batch registration and funding: Person 1 (not in this file yet)
+//! - Batch registration and funding: Person 1 (`fund_batch`, this file)
 //! - Claim validation / proof verification: Person 2 (behind `VerifierClient`)
 //! - Nullifier tracking and fund release: Person 3 (`withdraw`, this file)
 
@@ -29,8 +29,9 @@ const TTL_EXTEND_TO: u32 = 518_400;
 
 /// A funded disbursement batch.
 ///
-/// Layout proposed to @IbrahimIjai (Person 1), who owns creating batches. Withdraw
-/// only reads `root` and `token`, and updates `withdrawn`.
+/// Created by `fund_batch` once the conservation proof verifies, so `root` always
+/// commits to allocations that add up to exactly `total`. Withdraw only reads `root`
+/// and `token`, and updates `withdrawn`.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Batch {
@@ -48,8 +49,10 @@ pub struct Batch {
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
-    /// Address of the Groth16 verifier contract (instance storage).
+    /// Address of the Groth16 verifier for the withdraw circuit (instance storage).
     Verifier,
+    /// Address of the Groth16 verifier for the conservation circuit (instance storage).
+    ConservationVerifier,
     /// Batch data by batch id (persistent storage).
     Batch(u64),
     /// Spent marker for a nullifier, scoped to its batch (persistent storage).
@@ -73,12 +76,20 @@ pub enum VaultError {
     InsufficientBatchFunds = 5,
     /// The nullifier is not a canonical field element (>= field modulus).
     NonCanonicalNullifier = 6,
+    /// A batch with this id has already been registered.
+    BatchExists = 7,
+    /// The batch total is zero or negative.
+    InvalidTotal = 8,
+    /// The Merkle root is not a canonical field element (>= field modulus).
+    NonCanonicalRoot = 9,
 }
 
-/// Interface the vault expects from the Groth16 verifier contract.
+/// Interface the vault expects from a Groth16 verifier contract. Each verifier holds
+/// the verifying key of one circuit, so the vault is deployed with two of them.
 ///
 /// `public_inputs` are 32-byte big-endian field elements in the circuit's public
-/// signal order: [root, nullifierHash, recipient, amount].
+/// signal order: [root, nullifierHash, recipient, amount] for withdraw, and
+/// [root, total, batchId] for conservation.
 #[contractclient(name = "VerifierClient")]
 pub trait VerifierInterface {
     fn verify(env: Env, proof: Bytes, public_inputs: Vec<BytesN<32>>) -> bool;
@@ -95,14 +106,108 @@ pub struct Withdrawn {
     pub amount: i128,
 }
 
+/// Emitted after a batch is registered and funded.
+#[contractevent(topics = ["shield", "funded"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BatchFunded {
+    #[topic]
+    pub batch_id: u64,
+    pub funder: Address,
+    pub token: Address,
+    pub root: BytesN<32>,
+    pub total: i128,
+}
+
 #[contract]
 pub struct ShieldVault;
 
 #[contractimpl]
 impl ShieldVault {
-    /// Deploys the vault with the address of the Groth16 verifier contract.
-    pub fn __constructor(env: Env, verifier: Address) {
+    /// Deploys the vault with the Groth16 verifier contracts for the withdraw circuit
+    /// (`verifier`) and the conservation circuit (`conservation_verifier`).
+    pub fn __constructor(env: Env, verifier: Address, conservation_verifier: Address) {
         env.storage().instance().set(&DataKey::Verifier, &verifier);
+        env.storage()
+            .instance()
+            .set(&DataKey::ConservationVerifier, &conservation_verifier);
+    }
+
+    /// Registers batch `batch_id` and pulls its `total` from `funder`, if `proof`
+    /// shows that the allocations committed under `root` add up to exactly `total`.
+    ///
+    /// The proof is what stops a disburser from allocating more than it deposits.
+    /// Without it, `withdraw` could only cap payouts at `total`, and the last
+    /// recipients of an over-allocated batch would find nothing left to claim.
+    ///
+    /// Order of operations: validate inputs, verify the proof, store the batch, and
+    /// only then pull the tokens.
+    pub fn fund_batch(
+        env: Env,
+        funder: Address,
+        batch_id: u64,
+        token: Address,
+        root: BytesN<32>,
+        total: i128,
+        proof: Bytes,
+    ) -> Result<(), VaultError> {
+        funder.require_auth();
+
+        // 1. Cheap input checks
+        if total <= 0 {
+            return Err(VaultError::InvalidTotal);
+        }
+        // The verifier reduces inputs mod r, so root + r would verify like root. Only
+        // the canonical form is stored, so the root has one encoding everywhere.
+        if !is_canonical_field(&root) {
+            return Err(VaultError::NonCanonicalRoot);
+        }
+
+        // 2. Batch ids are never reused: commitments and nullifiers are scoped to them
+        let batch_key = DataKey::Batch(batch_id);
+        if env.storage().persistent().has(&batch_key) {
+            return Err(VaultError::BatchExists);
+        }
+
+        // 3. Verify the conservation proof in the circuit's public input order
+        let mut public_inputs = Vec::new(&env);
+        public_inputs.push_back(root.clone());
+        public_inputs.push_back(amount_to_field(&env, total));
+        public_inputs.push_back(batch_id_to_field(&env, batch_id));
+
+        let verifier: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::ConservationVerifier)
+            .unwrap();
+        if !VerifierClient::new(&env, &verifier).verify(&proof, &public_inputs) {
+            return Err(VaultError::InvalidProof);
+        }
+
+        // 4. Effects: store the batch
+        let batch = Batch {
+            root: root.clone(),
+            token: token.clone(),
+            total,
+            withdrawn: 0,
+        };
+        env.storage().persistent().set(&batch_key, &batch);
+        env.storage()
+            .persistent()
+            .extend_ttl(&batch_key, TTL_THRESHOLD, TTL_EXTEND_TO);
+
+        // 5. Interaction: pull the batch total into the vault
+        TokenClient::new(&env, &token).transfer(&funder, env.current_contract_address(), &total);
+
+        BatchFunded {
+            batch_id,
+            funder,
+            token,
+            root,
+            total,
+        }
+        .publish(&env);
+
+        Ok(())
     }
 
     /// Releases an allocation to `recipient` if `proof` is valid for this batch.
@@ -214,10 +319,18 @@ pub fn recipient_to_field(env: &Env, recipient: &Address) -> BytesN<32> {
     BytesN::from_array(env, &bytes)
 }
 
-/// Encodes an amount (0 < amount < 2^64) as a 32-byte big-endian field element.
+/// Encodes a positive amount (a payout, or a batch total) as a 32-byte big-endian
+/// field element. Any positive i128 is below the field modulus.
 fn amount_to_field(env: &Env, amount: i128) -> BytesN<32> {
     let mut bytes = [0u8; 32];
     bytes[16..].copy_from_slice(&amount.to_be_bytes());
+    BytesN::from_array(env, &bytes)
+}
+
+/// Encodes a batch id as a 32-byte big-endian field element.
+fn batch_id_to_field(env: &Env, batch_id: u64) -> BytesN<32> {
+    let mut bytes = [0u8; 32];
+    bytes[24..].copy_from_slice(&batch_id.to_be_bytes());
     BytesN::from_array(env, &bytes)
 }
 

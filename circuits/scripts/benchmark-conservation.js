@@ -10,12 +10,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const snarkjs = require("snarkjs");
-const { buildConservationInput, verifyConservation } = require("../lib/conservation");
-
-function randomFieldElement() {
-    // 31 random bytes always fit below the field size.
-    return BigInt("0x" + crypto.randomBytes(31).toString("hex"));
-}
+const { buildConservationInput, generateSecret, verifyConservation } = require("../lib/conservation");
 
 function megabytes(bytes) {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -43,12 +38,13 @@ async function main() {
 
     const allocations = Array.from({ length: 2 ** depth }, () => ({
         amount: BigInt(crypto.randomInt(1, 1_000_000_000)),
-        secret: randomFieldElement(),
+        secret: generateSecret(),
     }));
+    const batchId = crypto.randomBytes(8).readBigUInt64BE();
     const results = [];
 
     const { input } = await timed(results, "Build input (commitments + tree)", () =>
-        buildConservationInput({ allocations, batchId: randomFieldElement(), depth })
+        buildConservationInput({ allocations, batchId, depth })
     );
     const wtns = { type: "mem" };
     await timed(results, "Witness generation", () => snarkjs.wtns.calculate(input, wasmPath, wtns));

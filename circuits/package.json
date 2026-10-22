@@ -4,9 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "mkdir -p build && circom claim.circom --r1cs --wasm -o build && circom test_merkle.circom --r1cs --wasm -o build && circom test_nullifier.circom --r1cs --wasm -o build",
+    "build": "mkdir -p build && circom claim.circom --r1cs --wasm -o build && circom test_merkle.circom --r1cs --wasm -o build && circom test_nullifier.circom --r1cs --wasm -o build && bash scripts/groth16-setup.sh test_conservation 13",
     "test": "mocha --exit test/*.test.js",
     "setup:conservation": "bash scripts/groth16-setup.sh test_conservation 13",
+    "vectors": "node scripts/generate-test-vectors.js",
     "test:conservation": "mocha --exit test/conservation.test.js",
     "compile:conservation-main": "bash scripts/groth16-setup.sh conservation_main"
   },

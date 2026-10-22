@@ -1,0 +1,71 @@
+{
+  "description": "Batch vectors: leaves are the allocations' commitments in insertion order, every other leaf is 0, and the root is the binary Poseidon tree over all 2^depth leaves. publicSignals are the conservation circuit's public inputs [root, total, batchId] as snarkjs prints them (decimal). Field elements elsewhere are 32-byte big-endian hex. emptyRoots maps each depth to the root of a tree with no allocations. Produced by circuits/scripts/generate-test-vectors.js and checked by circuits/test/vectors.test.js and circuits/test/conservation.test.js.",
+  "emptyRoots": {
+    "3": "0x18f43331537ee2af2e3d758d50f72106467c6eea50371dd528d57eb2b856d238",
+    "10": "0x1b7201da72494f1e28717ad1a52eb469f95892f957713533de6175e5da190af2"
+  },
+  "batches": [
+    {
+      "name": "three allocations, depth 3 (test_conservation.circom)",
+      "depth": 3,
+      "batchId": "42",
+      "allocations": [
+        {
+          "amount": "50",
+          "secret": "111111111"
+        },
+        {
+          "amount": "30",
+          "secret": "222222222"
+        },
+        {
+          "amount": "20",
+          "secret": "333333333"
+        }
+      ],
+      "leaves": [
+        "0x0e67aa0b8b9804f397d012651c43c8eede8a5f0d477093463e206267fe89e12b",
+        "0x1d29cd3c383ccac60457708ac19860bf11e0f8e0763350e85b4e19cecc014ca8",
+        "0x095b8fce96c7b00310ba7b8b53032577cfe3776262d71e7cfc79b3e5c7a4c2d4"
+      ],
+      "root": "0x22e9e3aea5ac6dab0e526eb37194af906cabb3c09b4004802d9d68a09a641d78",
+      "total": "100",
+      "publicSignals": [
+        "15791883622823323346936144830756636600904089842604436861541945123290378149240",
+        "100",
+        "42"
+      ]
+    },
+    {
+      "name": "three allocations, depth 10 (production)",
+      "depth": 10,
+      "batchId": "42",
+      "allocations": [
+        {
+          "amount": "50",
+          "secret": "111111111"
+        },
+        {
+          "amount": "30",
+          "secret": "222222222"
+        },
+        {
+          "amount": "20",
+          "secret": "333333333"
+        }
+      ],
+      "leaves": [
+        "0x0e67aa0b8b9804f397d012651c43c8eede8a5f0d477093463e206267fe89e12b",
+        "0x1d29cd3c383ccac60457708ac19860bf11e0f8e0763350e85b4e19cecc014ca8",
+        "0x095b8fce96c7b00310ba7b8b53032577cfe3776262d71e7cfc79b3e5c7a4c2d4"
+      ],
+      "root": "0x0a031a7895e72614b467d604aef4ab02a493fa3ca23d142ea025dd8ce079c514",
+      "total": "100",
+      "publicSignals": [
+        "4528611723412236189868809845875262097676978817618337472746931013469574120724",
+        "100",
+        "42"
+      ]
+    }
+  ]
+}

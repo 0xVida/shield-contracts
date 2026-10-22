@@ -5,11 +5,14 @@ const snarkjs = require("snarkjs");
 const {
     FIELD_SIZE,
     MAX_AMOUNT,
+    MAX_BATCH_ID,
     buildConservationInput,
     buildConservationInputUnchecked,
+    generateSecret,
     proveConservation,
     verifyConservation,
 } = require("../lib/conservation");
+const batchVectors = require("../test-vectors/batch.json");
 
 // Must match the depth in test_conservation.circom.
 const DEPTH = 3;
@@ -44,6 +47,16 @@ async function expectRejected(input) {
     expect.fail("Expected the circuit to reject this input");
 }
 
+async function expectRangeError(promise) {
+    let error;
+    try {
+        await promise;
+    } catch (err) {
+        error = err;
+    }
+    expect(error).to.be.instanceOf(RangeError);
+}
+
 describe("Balance Conservation Circuit Tests", function () {
     this.timeout(60000);
 
@@ -62,6 +75,28 @@ describe("Balance Conservation Circuit Tests", function () {
             const { input } = await buildConservationInput({ allocations, batchId: BATCH_ID, depth: DEPTH });
             await expectAccepted(input);
         });
+
+        it("should accept the largest batch ID the vault can store", async () => {
+            const { input } = await buildConservationInput({
+                allocations: HONEST_ALLOCATIONS,
+                batchId: MAX_BATCH_ID,
+                depth: DEPTH,
+            });
+            await expectAccepted(input);
+        });
+
+        it("should accept the depth-3 batch from the shared test vectors", async () => {
+            const vector = batchVectors.batches.find((b) => b.depth === DEPTH);
+            const { input } = await buildConservationInput({
+                allocations: vector.allocations,
+                batchId: vector.batchId,
+                depth: DEPTH,
+            });
+            // Public values straight from the vector, so the circuit itself confirms its root.
+            input.root = BigInt(vector.root);
+            input.total = BigInt(vector.total);
+            await expectAccepted(input);
+        });
     });
 
     describe("Incorrect totals", () => {
@@ -74,6 +109,38 @@ describe("Balance Conservation Circuit Tests", function () {
         it("should reject a total that is one too low", async () => {
             const { input, total } = await honestBatch();
             input.total = total - 1n;
+            await expectRejected(input);
+        });
+    });
+
+    describe("Allocations left out of the total", () => {
+        // An allocation that is committed under the root but not counted would let a disburser
+        // hand out more than it deposited: the leaf stays claimable, but the total omits it.
+        it("should reject marking a committed allocation as an empty slot", async () => {
+            const { input, total } = await honestBatch();
+            input.active[2] = 0n;
+            input.amounts[2] = 0n;
+            input.total = total - 20n;
+            await expectRejected(input);
+        });
+
+        it("should reject counting a committed allocation as zero", async () => {
+            const { input, total } = await honestBatch();
+            input.amounts[2] = 0n;
+            input.total = total - 20n;
+            await expectRejected(input);
+        });
+
+        it("should reject counting a duplicated allocation only once", async () => {
+            // Carol's commitment sits in two slots, and each leaf has its own nullifier,
+            // so both could be claimed.
+            const { input } = await buildConservationInput({
+                allocations: [...HONEST_ALLOCATIONS, HONEST_ALLOCATIONS[2]],
+                batchId: BATCH_ID,
+                depth: DEPTH,
+            });
+            expect(input.total).to.equal(120n);
+            input.total = 100n;
             await expectRejected(input);
         });
     });
@@ -151,29 +218,36 @@ describe("Balance Conservation Circuit Tests", function () {
     describe("Input builder", () => {
         it("should refuse amounts outside the 64-bit range", async () => {
             for (const amount of [-1n, MAX_AMOUNT + 1n]) {
-                let error;
-                try {
-                    await buildConservationInput({
+                await expectRangeError(
+                    buildConservationInput({
                         allocations: [{ amount, secret: 111111111n }],
                         batchId: BATCH_ID,
                         depth: DEPTH,
-                    });
-                } catch (err) {
-                    error = err;
-                }
-                expect(error).to.be.instanceOf(RangeError);
+                    })
+                );
             }
         });
 
         it("should refuse more allocations than the tree has slots", async () => {
             const allocations = Array.from({ length: 2 ** DEPTH + 1 }, (_, i) => ({ amount: 1n, secret: BigInt(i + 1) }));
-            let error;
-            try {
-                await buildConservationInput({ allocations, batchId: BATCH_ID, depth: DEPTH });
-            } catch (err) {
-                error = err;
+            await expectRangeError(buildConservationInput({ allocations, batchId: BATCH_ID, depth: DEPTH }));
+        });
+
+        it("should refuse a batch ID that does not fit in a u64", async () => {
+            // The vault stores batches under a u64 id, so such a batch could never be registered.
+            for (const batchId of [-1n, MAX_BATCH_ID + 1n]) {
+                await expectRangeError(
+                    buildConservationInput({ allocations: HONEST_ALLOCATIONS, batchId, depth: DEPTH })
+                );
             }
-            expect(error).to.be.instanceOf(RangeError);
+        });
+
+        it("should generate distinct secrets that are field elements", () => {
+            const secrets = new Set(Array.from({ length: 100 }, () => generateSecret()));
+            expect(secrets.size).to.equal(100);
+            for (const secret of secrets) {
+                expect(secret >= 0n && secret < FIELD_SIZE).to.be.true;
+            }
         });
     });
 
