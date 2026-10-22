@@ -1,13 +1,14 @@
 #![cfg(test)]
-//! Tests for ShieldVault withdrawals, nullifier tracking and replay protection.
-//! Proof verification is mocked: real Groth16 proofs are wired in during Phase 2.
+//! Tests for ShieldVault batch registration, withdrawals, nullifier tracking and
+//! replay protection. Proof verification is mocked: real Groth16 proofs are wired
+//! in during Phase 2.
 
 use super::*;
 use soroban_sdk::{
     contract, contractimpl, symbol_short,
-    testutils::{Address as _, Events as _},
+    testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation, Events as _},
     token::{StellarAssetClient, TokenClient},
-    vec, Address, Bytes, BytesN, Env, Event, Vec,
+    vec, Address, Bytes, BytesN, Env, Event, IntoVal, Symbol, Vec,
 };
 
 // ---------------------------------------------------------------------------
@@ -57,43 +58,48 @@ struct Setup<'a> {
     env: Env,
     vault: ShieldVaultClient<'a>,
     verifier: MockVerifierClient<'a>,
+    conservation_verifier: MockVerifierClient<'a>,
     token: TokenClient<'a>,
+    funder: Address,
     root: BytesN<32>,
 }
 
-/// Deploys a vault with a mock verifier and a funded batch of BATCH_TOTAL tokens.
-///
-/// The batch is written straight into storage because batch registration is
-/// Person 1's function and not implemented yet.
+/// Deploys a vault and registers a batch of BATCH_TOTAL tokens through `fund_batch`.
 fn setup<'a>() -> Setup<'a> {
+    let s = deploy();
+    s.vault.fund_batch(
+        &s.funder,
+        &BATCH_ID,
+        &s.token.address,
+        &s.root,
+        &BATCH_TOTAL,
+        &proof(&s.env),
+    );
+    s
+}
+
+/// Deploys a vault with mock withdraw and conservation verifiers, and a funder
+/// holding BATCH_TOTAL tokens. No batch is registered yet.
+fn deploy<'a>() -> Setup<'a> {
     let env = Env::default();
     env.mock_all_auths();
 
     let verifier_id = env.register(MockVerifier, ());
-    let vault_id = env.register(ShieldVault, (&verifier_id,));
+    let conservation_verifier_id = env.register(MockVerifier, ());
+    let vault_id = env.register(ShieldVault, (&verifier_id, &conservation_verifier_id));
 
     let admin = Address::generate(&env);
     let token_id = env.register_stellar_asset_contract_v2(admin).address();
-    StellarAssetClient::new(&env, &token_id).mint(&vault_id, &BATCH_TOTAL);
-
-    let root = BytesN::from_array(&env, &[7u8; 32]);
-    let batch = Batch {
-        root: root.clone(),
-        token: token_id.clone(),
-        total: BATCH_TOTAL,
-        withdrawn: 0,
-    };
-    env.as_contract(&vault_id, || {
-        env.storage()
-            .persistent()
-            .set(&DataKey::Batch(BATCH_ID), &batch);
-    });
+    let funder = Address::generate(&env);
+    StellarAssetClient::new(&env, &token_id).mint(&funder, &BATCH_TOTAL);
 
     Setup {
         vault: ShieldVaultClient::new(&env, &vault_id),
         verifier: MockVerifierClient::new(&env, &verifier_id),
+        conservation_verifier: MockVerifierClient::new(&env, &conservation_verifier_id),
         token: TokenClient::new(&env, &token_id),
-        root,
+        funder,
+        root: BytesN::from_array(&env, &[7u8; 32]),
         env,
     }
 }
@@ -108,6 +114,216 @@ fn nullifier(env: &Env, n: u8) -> BytesN<32> {
 /// Placeholder proof bytes; the mock verifier ignores them.
 fn proof(env: &Env) -> Bytes {
     Bytes::from_array(env, &[1u8; 256])
+}
+
+// ---------------------------------------------------------------------------
+// Batch registration
+// ---------------------------------------------------------------------------
+
+#[test]
+fn fund_batch_stores_batch_and_pulls_total() {
+    let s = setup();
+
+    assert_eq!(
+        s.vault.get_batch(&BATCH_ID),
+        Some(Batch {
+            root: s.root.clone(),
+            token: s.token.address.clone(),
+            total: BATCH_TOTAL,
+            withdrawn: 0,
+        })
+    );
+    assert_eq!(s.token.balance(&s.funder), 0);
+    assert_eq!(s.token.balance(&s.vault.address), BATCH_TOTAL);
+}
+
+#[test]
+fn fund_batch_passes_public_inputs_in_circuit_order() {
+    let s = setup();
+
+    // [root, total, batchId]
+    let mut total = [0u8; 32];
+    total[30..].copy_from_slice(&10_000u16.to_be_bytes());
+    let mut batch_id = [0u8; 32];
+    batch_id[31] = BATCH_ID as u8;
+    let expected = vec![
+        &s.env,
+        s.root.clone(),
+        BytesN::from_array(&s.env, &total),
+        BytesN::from_array(&s.env, &batch_id),
+    ];
+    assert_eq!(s.conservation_verifier.last_inputs(), expected);
+}
+
+#[test]
+fn fund_batch_emits_event() {
+    let s = setup();
+
+    let event = BatchFunded {
+        batch_id: BATCH_ID,
+        funder: s.funder.clone(),
+        token: s.token.address.clone(),
+        root: s.root.clone(),
+        total: BATCH_TOTAL,
+    };
+    assert_eq!(
+        s.env.events().all().filter_by_contract(&s.vault.address),
+        [Event::to_xdr(&event, &s.env, &s.vault.address)]
+    );
+}
+
+#[test]
+fn fund_batch_is_authorised_by_the_funder() {
+    extern crate std;
+    let s = setup();
+
+    // The funder's signature on fund_batch also covers the token transfer it makes
+    let transfer = AuthorizedInvocation {
+        function: AuthorizedFunction::Contract((
+            s.token.address.clone(),
+            symbol_short!("transfer"),
+            (s.funder.clone(), s.vault.address.clone(), BATCH_TOTAL).into_val(&s.env),
+        )),
+        sub_invocations: std::vec![],
+    };
+    let fund_batch = AuthorizedInvocation {
+        function: AuthorizedFunction::Contract((
+            s.vault.address.clone(),
+            Symbol::new(&s.env, "fund_batch"),
+            (
+                s.funder.clone(),
+                BATCH_ID,
+                s.token.address.clone(),
+                s.root.clone(),
+                BATCH_TOTAL,
+                proof(&s.env),
+            )
+                .into_val(&s.env),
+        )),
+        sub_invocations: std::vec![transfer],
+    };
+    assert_eq!(s.env.auths(), std::vec![(s.funder.clone(), fund_batch)]);
+}
+
+#[test]
+fn batches_cannot_draw_on_each_others_funds() {
+    // Both batches hold the same token in the vault, but each pays out only its own total
+    let s = setup();
+    let other_funder = Address::generate(&s.env);
+    StellarAssetClient::new(&s.env, &s.token.address).mint(&other_funder, &5_000);
+    s.vault.fund_batch(
+        &other_funder,
+        &(BATCH_ID + 1),
+        &s.token.address,
+        &BytesN::from_array(&s.env, &[8u8; 32]),
+        &5_000,
+        &proof(&s.env),
+    );
+    assert_eq!(s.token.balance(&s.vault.address), BATCH_TOTAL + 5_000);
+
+    let result = s.vault.try_withdraw(
+        &BATCH_ID,
+        &proof(&s.env),
+        &nullifier(&s.env, 1),
+        &Address::generate(&s.env),
+        &(BATCH_TOTAL + 1),
+    );
+    assert_eq!(result, Err(Ok(VaultError::InsufficientBatchFunds)));
+}
+
+// ---------------------------------------------------------------------------
+// Invalid registrations leave no trace
+// ---------------------------------------------------------------------------
+
+#[test]
+fn invalid_conservation_proof_is_rejected_without_state_change() {
+    let s = deploy();
+    s.conservation_verifier.set_result(&false);
+
+    let result = s.vault.try_fund_batch(
+        &s.funder,
+        &BATCH_ID,
+        &s.token.address,
+        &s.root,
+        &BATCH_TOTAL,
+        &proof(&s.env),
+    );
+
+    assert_eq!(result, Err(Ok(VaultError::InvalidProof)));
+    assert_eq!(s.vault.get_batch(&BATCH_ID), None);
+    assert_eq!(s.token.balance(&s.funder), BATCH_TOTAL);
+}
+
+#[test]
+fn registered_batch_id_cannot_be_reused() {
+    let s = setup();
+    StellarAssetClient::new(&s.env, &s.token.address).mint(&s.funder, &BATCH_TOTAL);
+
+    let result = s.vault.try_fund_batch(
+        &s.funder,
+        &BATCH_ID,
+        &s.token.address,
+        &BytesN::from_array(&s.env, &[8u8; 32]),
+        &BATCH_TOTAL,
+        &proof(&s.env),
+    );
+
+    assert_eq!(result, Err(Ok(VaultError::BatchExists)));
+    assert_eq!(s.vault.get_batch(&BATCH_ID).unwrap().root, s.root);
+    assert_eq!(s.token.balance(&s.funder), BATCH_TOTAL);
+}
+
+#[test]
+fn invalid_totals_are_rejected() {
+    let s = deploy();
+    for total in [0i128, -1] {
+        let result = s.vault.try_fund_batch(
+            &s.funder,
+            &BATCH_ID,
+            &s.token.address,
+            &s.root,
+            &total,
+            &proof(&s.env),
+        );
+        assert_eq!(result, Err(Ok(VaultError::InvalidTotal)));
+    }
+}
+
+#[test]
+fn non_canonical_root_is_rejected() {
+    let s = deploy();
+    let at_modulus = BytesN::from_array(&s.env, &FIELD_MODULUS);
+    let above = BytesN::from_array(&s.env, &[0xff; 32]);
+
+    for root in [at_modulus, above] {
+        let result = s.vault.try_fund_batch(
+            &s.funder,
+            &BATCH_ID,
+            &s.token.address,
+            &root,
+            &BATCH_TOTAL,
+            &proof(&s.env),
+        );
+        assert_eq!(result, Err(Ok(VaultError::NonCanonicalRoot)));
+    }
+}
+
+#[test]
+fn funder_without_the_total_cannot_register() {
+    let s = deploy();
+
+    let result = s.vault.try_fund_batch(
+        &s.funder,
+        &BATCH_ID,
+        &s.token.address,
+        &s.root,
+        &(BATCH_TOTAL + 1),
+        &proof(&s.env),
+    );
+
+    assert!(result.is_err());
+    assert_eq!(s.vault.get_batch(&BATCH_ID), None);
+    assert_eq!(s.token.balance(&s.funder), BATCH_TOTAL);
 }
 
 // ---------------------------------------------------------------------------
