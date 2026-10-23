@@ -6,6 +6,7 @@ target
 .stellar
 
 node_modules
+.pnpm-store
 circuits/node_modules
 circuits/build
 *.zkey
