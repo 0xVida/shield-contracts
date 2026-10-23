@@ -19,8 +19,9 @@ describe("Allocation Ownership & Claim Circuit Tests", function () {
     const recipientAddress = recipientVectors[0].address; // G... account
     const attackerStellarAddress = recipientVectors[1].address; // C... contract
     const recipient = addressToField(recipientAddress);
+    const BATCH_ID = 42n;
 
-    // Allocation allocations
+    // Test allocations
     const allocations = [
         { secret: BigInt(111111111), amount: BigInt(5000) },
         { secret: BigInt(222222222), amount: BigInt(12500) },
@@ -33,7 +34,7 @@ describe("Allocation Ownership & Claim Circuit Tests", function () {
         tree = await MerkleTree.create(10); // depth 10 (1024 allocations)
 
         allocations.forEach((alloc, index) => {
-            const commitment = BigInt(poseidon.F.toString(poseidon([alloc.secret, alloc.amount])));
+            const commitment = BigInt(poseidon.F.toString(poseidon([alloc.amount, alloc.secret, BATCH_ID])));
             alloc.commitment = commitment;
             alloc.nullifierHash = computeNullifier(poseidon, alloc.secret, index);
             tree.insert(commitment);
@@ -51,6 +52,7 @@ describe("Allocation Ownership & Claim Circuit Tests", function () {
             recipient: recipient.toString(),
             amount: alloc.amount.toString(),
             secret: alloc.secret.toString(),
+            batchId: BATCH_ID.toString(),
             pathElements: proof.pathElements.map((x) => x.toString()),
             pathIndices: proof.pathIndices,
         };
@@ -73,6 +75,7 @@ describe("Allocation Ownership & Claim Circuit Tests", function () {
             recipient: recipient.toString(),
             amount: alloc.amount.toString(),
             secret: BigInt(999999999).toString(), // Forged secret!
+            batchId: BATCH_ID.toString(),
             pathElements: proof.pathElements.map((x) => x.toString()),
             pathIndices: proof.pathIndices,
         };
@@ -99,6 +102,7 @@ describe("Allocation Ownership & Claim Circuit Tests", function () {
             recipient: recipient.toString(),
             amount: BigInt(9999999).toString(), // Inflated amount!
             secret: alloc.secret.toString(),
+            batchId: BATCH_ID.toString(),
             pathElements: proof.pathElements.map((x) => x.toString()),
             pathIndices: proof.pathIndices,
         };
@@ -128,6 +132,7 @@ describe("Allocation Ownership & Claim Circuit Tests", function () {
             recipient: recipient.toString(),
             amount: alloc.amount.toString(),
             secret: alloc.secret.toString(),
+            batchId: BATCH_ID.toString(),
             pathElements: corruptedPath.map((x) => x.toString()),
             pathIndices: proof.pathIndices,
         };
@@ -154,6 +159,7 @@ describe("Allocation Ownership & Claim Circuit Tests", function () {
             recipient: recipient.toString(),
             amount: alloc.amount.toString(),
             secret: alloc.secret.toString(),
+            batchId: BATCH_ID.toString(),
             pathElements: proof.pathElements.map((x) => x.toString()),
             pathIndices: proof.pathIndices,
         };
@@ -180,6 +186,7 @@ describe("Allocation Ownership & Claim Circuit Tests", function () {
             recipient: recipient.toString(),
             amount: alloc.amount.toString(),
             secret: alloc.secret.toString(),
+            batchId: BATCH_ID.toString(),
             pathElements: proof.pathElements.map((x) => x.toString()),
             pathIndices: proof.pathIndices,
         };
@@ -188,6 +195,31 @@ describe("Allocation Ownership & Claim Circuit Tests", function () {
         try {
             await snarkjs.wtns.calculate(input, wasmPath, witnessFile);
             expect.fail("Expected failure with mismatched leaf index nullifier");
+        } catch (err) {
+            expect(err.message).to.include("Assert Failed");
+        } finally {
+            if (fs.existsSync(witnessFile)) fs.unlinkSync(witnessFile);
+        }
+    });
+
+    it("should reject a claim for the wrong batch identifier", async () => {
+        const index = 0;
+        const alloc = allocations[index];
+        const proof = tree.getProof(index);
+        const input = {
+            root: proof.root.toString(),
+            nullifierHash: alloc.nullifierHash.toString(),
+            recipient: recipient.toString(),
+            amount: alloc.amount.toString(),
+            secret: alloc.secret.toString(),
+            batchId: (BATCH_ID + 1n).toString(),
+            pathElements: proof.pathElements.map((x) => x.toString()),
+            pathIndices: proof.pathIndices,
+        };
+        const witnessFile = path.join(__dirname, "../build/witness_wrong_batch.wtns");
+        try {
+            await snarkjs.wtns.calculate(input, wasmPath, witnessFile);
+            expect.fail("Expected failure with a mismatched batch id");
         } catch (err) {
             expect(err.message).to.include("Assert Failed");
         } finally {
@@ -210,6 +242,7 @@ describe("Allocation Ownership & Claim Circuit Tests", function () {
                 recipient: recipient.toString(),
                 amount: alloc.amount.toString(),
                 secret: alloc.secret.toString(),
+                batchId: BATCH_ID.toString(),
                 pathElements: proof.pathElements.map((x) => x.toString()),
                 pathIndices: proof.pathIndices,
             };
@@ -237,6 +270,7 @@ describe("Allocation Ownership & Claim Circuit Tests", function () {
                 recipient: recipient.toString(),
                 amount: alloc.amount.toString(),
                 secret: alloc.secret.toString(),
+                batchId: BATCH_ID.toString(),
                 pathElements: proof.pathElements.map((x) => x.toString()),
                 pathIndices: proof.pathIndices,
             };
@@ -270,6 +304,7 @@ describe("Allocation Ownership & Claim Circuit Tests", function () {
                 recipient: recipient.toString(),
                 amount: alloc.amount.toString(),
                 secret: alloc.secret.toString(),
+                batchId: BATCH_ID.toString(),
                 pathElements: proof.pathElements.map((x) => x.toString()),
                 pathIndices: proof.pathIndices,
             };

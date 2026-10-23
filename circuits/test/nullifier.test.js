@@ -14,18 +14,19 @@ describe("Nullifier Derivation & Binding Circuit Tests", function () {
     this.timeout(60000);
 
     const LEVELS = 4; // Must match the depth in test_nullifier.circom
+    const BATCH_ID = 42n;
     const wasmPath = path.join(__dirname, "../build/test_nullifier_js/test_nullifier.wasm");
     let poseidon;
 
-    // Commitment as built in claim.circom: Poseidon(secret, amount)
-    const commit = (secret, amount) => BigInt(poseidon.F.toString(poseidon([secret, amount])));
+    const commit = (secret, amount, batchId = BATCH_ID) =>
+        BigInt(poseidon.F.toString(poseidon([amount, secret, batchId])));
 
-    // Builds a circuit input for a valid claim; override any field to forge one
-    const buildInput = ({ secret, amount, leafIndex, commitment, nullifierHash, pathIndices }) => ({
-        commitment: (commitment ?? commit(secret, amount)).toString(),
+    const buildInput = ({ secret, amount, leafIndex, batchId = BATCH_ID, commitment, nullifierHash, pathIndices }) => ({
+        commitment: (commitment ?? commit(secret, amount, batchId)).toString(),
         nullifierHash: (nullifierHash ?? computeNullifier(poseidon, secret, leafIndex)).toString(),
         secret: secret.toString(),
         amount: amount.toString(),
+        batchId: batchId.toString(),
         pathIndices: pathIndices ?? indexToPathIndices(leafIndex, LEVELS),
     });
 
@@ -134,6 +135,19 @@ describe("Nullifier Derivation & Binding Circuit Tests", function () {
             commitment: commit(realSecret, BigInt(5000)), // Commitment uses realSecret
         });
         await expectReject(input, "split_secret");
+    });
+
+    it("should reject a commitment opened with a different batch identifier", async () => {
+        const secret = BigInt(111111111);
+        const amount = BigInt(5000);
+        const input = buildInput({
+            secret,
+            amount,
+            leafIndex: 3,
+            batchId: BATCH_ID + 1n,
+            commitment: commit(secret, amount, BATCH_ID),
+        });
+        await expectReject(input, "wrong_batch");
     });
 
     it("should reject non-binary path indices", async () => {
