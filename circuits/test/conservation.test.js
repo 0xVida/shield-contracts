@@ -134,7 +134,7 @@ describe("Balance Conservation Circuit Tests", function () {
         it("should reject counting a duplicated allocation only once", async () => {
             // Carol's commitment sits in two slots, and each leaf has its own nullifier,
             // so both could be claimed.
-            const { input } = await buildConservationInput({
+            const { input } = await buildConservationInputUnchecked({
                 allocations: [...HONEST_ALLOCATIONS, HONEST_ALLOCATIONS[2]],
                 batchId: BATCH_ID,
                 depth: DEPTH,
@@ -231,6 +231,17 @@ describe("Balance Conservation Circuit Tests", function () {
         it("should refuse more allocations than the tree has slots", async () => {
             const allocations = Array.from({ length: 2 ** DEPTH + 1 }, (_, i) => ({ amount: 1n, secret: BigInt(i + 1) }));
             await expectRangeError(buildConservationInput({ allocations, batchId: BATCH_ID, depth: DEPTH }));
+        });
+
+        it("should refuse two allocations with the same secret", async () => {
+            // Whoever holds the shared secret could claim both allocations
+            await expectRangeError(
+                buildConservationInput({
+                    allocations: [...HONEST_ALLOCATIONS, { amount: 40n, secret: HONEST_ALLOCATIONS[0].secret }],
+                    batchId: BATCH_ID,
+                    depth: DEPTH,
+                })
+            );
         });
 
         it("should refuse a batch ID that does not fit in a u64", async () => {

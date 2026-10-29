@@ -1,5 +1,5 @@
 {
-  "description": "Batch vectors: leaves are the allocations' commitments in insertion order, every other leaf is 0, and the root is the binary Poseidon tree over all 2^depth leaves. publicSignals are the conservation circuit's public inputs [root, total, batchId] as snarkjs prints them (decimal). Field elements elsewhere are 32-byte big-endian hex. emptyRoots maps each depth to the root of a tree with no allocations. Produced by circuits/scripts/generate-test-vectors.js and checked by circuits/test/vectors.test.js and circuits/test/conservation.test.js.",
+  "description": "Batch vectors: leaves are the allocations' commitments in insertion order, every other leaf is 0, and the root is the binary Poseidon tree over all 2^depth leaves. publicSignals are the conservation circuit's public inputs [root, total, batchId] as snarkjs prints them (decimal). claims[i] is what allocation i's recipient needs to claim: its leafIndex, its Merkle path (pathElements are the sibling hashes from the leaf up; pathIndices[k] is bit k of leafIndex, 0 when the path node is a left child) and its nullifier. Field elements elsewhere are 32-byte big-endian hex. emptyRoots maps each depth to the root of a tree with no allocations. Produced by circuits/scripts/generate-test-vectors.js and checked by circuits/test/vectors.test.js and circuits/test/conservation.test.js.",
   "emptyRoots": {
     "3": "0x18f43331537ee2af2e3d758d50f72106467c6eea50371dd528d57eb2b856d238",
     "10": "0x1b7201da72494f1e28717ad1a52eb469f95892f957713533de6175e5da190af2"
@@ -34,6 +34,50 @@
         "15791883622823323346936144830756636600904089842604436861541945123290378149240",
         "100",
         "42"
+      ],
+      "claims": [
+        {
+          "leafIndex": 0,
+          "pathElements": [
+            "0x1d29cd3c383ccac60457708ac19860bf11e0f8e0763350e85b4e19cecc014ca8",
+            "0x09ed35bca4579f2ec2d88ac5ae9ec69893cb4468b867c06d75431dc1454aa6dd",
+            "0x1069673dcdb12263df301a6ff584a7ec261a44cb9dc68df067a4774460b1f1e1"
+          ],
+          "pathIndices": [
+            0,
+            0,
+            0
+          ],
+          "nullifier": "0x30128a873ad453f032bc29b9950c02a2d26aa9bc31b9c565771047e85037def0"
+        },
+        {
+          "leafIndex": 1,
+          "pathElements": [
+            "0x0e67aa0b8b9804f397d012651c43c8eede8a5f0d477093463e206267fe89e12b",
+            "0x09ed35bca4579f2ec2d88ac5ae9ec69893cb4468b867c06d75431dc1454aa6dd",
+            "0x1069673dcdb12263df301a6ff584a7ec261a44cb9dc68df067a4774460b1f1e1"
+          ],
+          "pathIndices": [
+            1,
+            0,
+            0
+          ],
+          "nullifier": "0x16d4f9c2caad66f114b6a5e7f95e0af2947e78611d7ebaa2be4229d29295665a"
+        },
+        {
+          "leafIndex": 2,
+          "pathElements": [
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0e79948b2f13310ffde98df87963469b0c603c4dd10010d1c8e605e145a2f1d7",
+            "0x1069673dcdb12263df301a6ff584a7ec261a44cb9dc68df067a4774460b1f1e1"
+          ],
+          "pathIndices": [
+            0,
+            1,
+            0
+          ],
+          "nullifier": "0x03687797144e729f4051638d6f11569304743e9a882a1ae6200a1606b34774a2"
+        }
       ]
     },
     {
@@ -65,6 +109,92 @@
         "4528611723412236189868809845875262097676978817618337472746931013469574120724",
         "100",
         "42"
+      ],
+      "claims": [
+        {
+          "leafIndex": 0,
+          "pathElements": [
+            "0x1d29cd3c383ccac60457708ac19860bf11e0f8e0763350e85b4e19cecc014ca8",
+            "0x09ed35bca4579f2ec2d88ac5ae9ec69893cb4468b867c06d75431dc1454aa6dd",
+            "0x1069673dcdb12263df301a6ff584a7ec261a44cb9dc68df067a4774460b1f1e1",
+            "0x18f43331537ee2af2e3d758d50f72106467c6eea50371dd528d57eb2b856d238",
+            "0x07f9d837cb17b0d36320ffe93ba52345f1b728571a568265caac97559dbc952a",
+            "0x2b94cf5e8746b3f5c9631f4c5df32907a699c58c94b2ad4d7b5cec1639183f55",
+            "0x2dee93c5a666459646ea7d22cca9e1bcfed71e6951b953611d11dda32ea09d78",
+            "0x078295e5a22b84e982cf601eb639597b8b0515a88cb5ac7fa8a4aabe3c87349d",
+            "0x2fa5e5f18f6027a6501bec864564472a616b2e274a41211a444cbe3a99f3cc61",
+            "0x0e884376d0d8fd21ecb780389e941f66e45e7acce3e228ab3e2156a614fcd747"
+          ],
+          "pathIndices": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "nullifier": "0x30128a873ad453f032bc29b9950c02a2d26aa9bc31b9c565771047e85037def0"
+        },
+        {
+          "leafIndex": 1,
+          "pathElements": [
+            "0x0e67aa0b8b9804f397d012651c43c8eede8a5f0d477093463e206267fe89e12b",
+            "0x09ed35bca4579f2ec2d88ac5ae9ec69893cb4468b867c06d75431dc1454aa6dd",
+            "0x1069673dcdb12263df301a6ff584a7ec261a44cb9dc68df067a4774460b1f1e1",
+            "0x18f43331537ee2af2e3d758d50f72106467c6eea50371dd528d57eb2b856d238",
+            "0x07f9d837cb17b0d36320ffe93ba52345f1b728571a568265caac97559dbc952a",
+            "0x2b94cf5e8746b3f5c9631f4c5df32907a699c58c94b2ad4d7b5cec1639183f55",
+            "0x2dee93c5a666459646ea7d22cca9e1bcfed71e6951b953611d11dda32ea09d78",
+            "0x078295e5a22b84e982cf601eb639597b8b0515a88cb5ac7fa8a4aabe3c87349d",
+            "0x2fa5e5f18f6027a6501bec864564472a616b2e274a41211a444cbe3a99f3cc61",
+            "0x0e884376d0d8fd21ecb780389e941f66e45e7acce3e228ab3e2156a614fcd747"
+          ],
+          "pathIndices": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "nullifier": "0x16d4f9c2caad66f114b6a5e7f95e0af2947e78611d7ebaa2be4229d29295665a"
+        },
+        {
+          "leafIndex": 2,
+          "pathElements": [
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "0x0e79948b2f13310ffde98df87963469b0c603c4dd10010d1c8e605e145a2f1d7",
+            "0x1069673dcdb12263df301a6ff584a7ec261a44cb9dc68df067a4774460b1f1e1",
+            "0x18f43331537ee2af2e3d758d50f72106467c6eea50371dd528d57eb2b856d238",
+            "0x07f9d837cb17b0d36320ffe93ba52345f1b728571a568265caac97559dbc952a",
+            "0x2b94cf5e8746b3f5c9631f4c5df32907a699c58c94b2ad4d7b5cec1639183f55",
+            "0x2dee93c5a666459646ea7d22cca9e1bcfed71e6951b953611d11dda32ea09d78",
+            "0x078295e5a22b84e982cf601eb639597b8b0515a88cb5ac7fa8a4aabe3c87349d",
+            "0x2fa5e5f18f6027a6501bec864564472a616b2e274a41211a444cbe3a99f3cc61",
+            "0x0e884376d0d8fd21ecb780389e941f66e45e7acce3e228ab3e2156a614fcd747"
+          ],
+          "pathIndices": [
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "nullifier": "0x03687797144e729f4051638d6f11569304743e9a882a1ae6200a1606b34774a2"
+        }
       ]
     }
   ]

@@ -1,0 +1,24 @@
+{
+  "description": "A real Groth16 proof from test_conservation.circom (Conservation(3)) for the depth-3 batch in batch.json, and the verifying key it was made with. Byte strings are hex in the contracts' encoding (circuits/lib/soroban.js): proof is A || B || C (256 bytes), verifyingKey is ShieldVerifier's constructor argument, and the vault passes publicSignals [root, total, batchId] to the verifier as 32-byte big-endian field elements. Development keys from scripts/groth16-setup.sh, not a trusted setup. Produced by circuits/scripts/export-conservation-fixture.js and checked by circuits/test/soroban.test.js and contracts/shield-vault/src/test.rs.",
+  "batchId": "42",
+  "root": "0x22e9e3aea5ac6dab0e526eb37194af906cabb3c09b4004802d9d68a09a641d78",
+  "total": "100",
+  "publicSignals": [
+    "15791883622823323346936144830756636600904089842604436861541945123290378149240",
+    "100",
+    "42"
+  ],
+  "proof": "0x054e63c3a62afc157c5ed2c6e69942c299da42ce0acf048739f36b59089e52e51f8f82f6628af4cc04d7bec1ae67e48a87565fa85cc98ef3f35c731405f15721053b1d044cb5e81dbc4fb9f0c44f3d8dc3ff7516a3f25d9f3e2e0d31d34f4dbd0fd3767e7cf1a9c563e0bf14eda4737f5fb2ae308222afebbc2c9069620fd66e1fcf9ca19e91d74c0b45105f1d413e6a40ef4a3ffe5eb3812b859f0b3ad4d3f20922dd9259cb83da1a1bc5748967926680e903383351a671fbf49a083fb96be509d05b476be067305f4230fadc57c5c037e850be15f270550bd99967efef355a204632366378d89228ad3de830b88aaf59c9a4b0bc02fff47b14c06c46394b71",
+  "verifyingKey": {
+    "alpha": "0x234dcf6940441b46c321448c1a53abff497439b06e64969c0dd207b26d626ab52b8b1b2be8a2c0588d5da24126c7290222fde0fdfc39b9915296c15bfc4b7e58",
+    "beta": "0x0cfdf575af139136e90c4bdfaa8619b512a5aef21ba5da133692ff7665e3924a043d4a43eacf9ed8001b107e16a662e8152785be413f302d8cadc9c1f40f27321f830fa8a572f2f85eb4d72365700332263f9ca2d709c0e9422a1bf72766c6e60758980a4979430c1686bb4b9a93f0a9dc50d6304ffb012f95777a8314c9d6ec",
+    "gamma": "0x198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c21800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa",
+    "delta": "0x1dd77cdec455c00aba3661b0ec0120720a475e31dbe332ee4066e19910cd6e471019f301dc9c61ba35b7c57bb6dc615d3991d11b599e35532c45d8ec3823005509e7c83042610a6b22ce01c2e1bace07fa79e75fe08014b8510673430f2831632495f501e3507dd575b2fab3e4c7d8f3b9ef58140c4a8aee5556c8a3f9b71804",
+    "ic": [
+      "0x10bdf1b28072d0438ec525d522ca0c4ff6b99d974b5a47cff1135f400f4e6786081d5cf0ad02a4c02cdd9b55563c4accf65af6c8113f0e5ab1d491e358d5b9f1",
+      "0x1984d0d543b2cd18456c17453b648292722feeb24b849f0acb2eb667ffe2933d2255f1ce553087cef7b3d8ffacb802ed938137a89f9463a8b7f58c1266464fc2",
+      "0x2a917e76363359a4d175918a8ff8d1453f321447afe9b1e42dc73574fca3ab4a2e1abcce8896485b727d61e563b1b6012c6d4ddc13c64ab3f9dc09160f38e6ba",
+      "0x24f227dc941fb2db501643cd3128b1720450595bd6d66904c2ff4cacad3720ff27fad3af0a3f2648f5ad3342e87cb26ac3c0e3917622edaba76ecf8b34015ca8"
+    ]
+  }
+}

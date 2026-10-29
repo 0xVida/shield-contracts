@@ -1,9 +1,10 @@
 #![cfg(test)]
 //! Tests for ShieldVault batch registration, withdrawals, nullifier tracking and
-//! replay protection. Proof verification is mocked: real Groth16 proofs are wired
-//! in during Phase 2.
+//! replay protection. Proof verification is mocked, except where a batch is
+//! registered with a real conservation proof through the real ShieldVerifier.
 
 use super::*;
+use shield_verifier::{ShieldVerifier, VerifyingKey};
 use soroban_sdk::{
     contract, contractimpl, symbol_short,
     testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation, Events as _},
@@ -324,6 +325,180 @@ fn funder_without_the_total_cannot_register() {
     assert!(result.is_err());
     assert_eq!(s.vault.get_batch(&BATCH_ID), None);
     assert_eq!(s.token.balance(&s.funder), BATCH_TOTAL);
+}
+
+// ---------------------------------------------------------------------------
+// Batch registration with a real conservation proof
+// ---------------------------------------------------------------------------
+
+/// A real Groth16 proof for the depth-3 batch in circuits/test-vectors/batch.json, and
+/// the verifying key it was made with (circuits/scripts/export-conservation-fixture.js).
+struct RealBatch {
+    batch_id: u64,
+    root: BytesN<32>,
+    total: i128,
+    proof: Bytes,
+    verifying_key: VerifyingKey,
+}
+
+struct RealSetup<'a> {
+    env: Env,
+    vault: ShieldVaultClient<'a>,
+    token: TokenClient<'a>,
+    funder: Address,
+    batch: RealBatch,
+}
+
+/// Deploys a vault whose conservation verifier is the real ShieldVerifier, holding the
+/// fixture's verifying key, and a funder holding the batch total. Withdrawals stay mocked.
+fn deploy_with_real_conservation_verifier<'a>() -> RealSetup<'a> {
+    let env = Env::default();
+    env.mock_all_auths();
+    let batch = real_batch(&env);
+
+    let verifier_id = env.register(MockVerifier, ());
+    let conservation_verifier_id = env.register(ShieldVerifier, (batch.verifying_key.clone(),));
+    let vault_id = env.register(ShieldVault, (&verifier_id, &conservation_verifier_id));
+
+    let token_id = env
+        .register_stellar_asset_contract_v2(Address::generate(&env))
+        .address();
+    let funder = Address::generate(&env);
+    StellarAssetClient::new(&env, &token_id).mint(&funder, &batch.total);
+
+    RealSetup {
+        vault: ShieldVaultClient::new(&env, &vault_id),
+        token: TokenClient::new(&env, &token_id),
+        funder,
+        batch,
+        env,
+    }
+}
+
+fn real_batch(env: &Env) -> RealBatch {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../circuits/test-vectors/conservation-proof.json"
+    ))
+    .unwrap();
+    let vk = &fixture["verifyingKey"];
+    let mut ic = Vec::new(env);
+    for point in vk["ic"].as_array().unwrap() {
+        ic.push_back(BytesN::from_array(env, &hex_array(point)));
+    }
+    RealBatch {
+        batch_id: fixture["batchId"].as_str().unwrap().parse().unwrap(),
+        root: BytesN::from_array(env, &hex_array(&fixture["root"])),
+        total: fixture["total"].as_str().unwrap().parse().unwrap(),
+        proof: Bytes::from_array(env, &hex_array::<256>(&fixture["proof"])),
+        verifying_key: VerifyingKey {
+            alpha: BytesN::from_array(env, &hex_array(&vk["alpha"])),
+            beta: BytesN::from_array(env, &hex_array(&vk["beta"])),
+            gamma: BytesN::from_array(env, &hex_array(&vk["gamma"])),
+            delta: BytesN::from_array(env, &hex_array(&vk["delta"])),
+            ic,
+        },
+    }
+}
+
+/// Decodes a "0x..." hex string from a JSON fixture into exactly N bytes.
+fn hex_array<const N: usize>(value: &serde_json::Value) -> [u8; N] {
+    let hex = value.as_str().unwrap().strip_prefix("0x").unwrap();
+    assert_eq!(hex.len(), 2 * N);
+    let mut bytes = [0u8; N];
+    for (i, byte) in bytes.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(&hex[2 * i..2 * i + 2], 16).unwrap();
+    }
+    bytes
+}
+
+#[test]
+fn real_conservation_proof_registers_the_batch() {
+    let s = deploy_with_real_conservation_verifier();
+    let b = &s.batch;
+
+    s.vault.fund_batch(
+        &s.funder,
+        &b.batch_id,
+        &s.token.address,
+        &b.root,
+        &b.total,
+        &b.proof,
+    );
+
+    assert_eq!(
+        s.vault.get_batch(&b.batch_id),
+        Some(Batch {
+            root: b.root.clone(),
+            token: s.token.address.clone(),
+            total: b.total,
+            withdrawn: 0,
+        })
+    );
+    assert_eq!(s.token.balance(&s.vault.address), b.total);
+}
+
+#[test]
+fn real_conservation_proof_only_verifies_for_its_own_batch() {
+    // The proof covers [root, total, batchId]; it is worthless for any other values
+    let s = deploy_with_real_conservation_verifier();
+    let b = &s.batch;
+    StellarAssetClient::new(&s.env, &s.token.address).mint(&s.funder, &1);
+    let mut other_root = b.root.to_array();
+    other_root[31] ^= 1;
+
+    for (batch_id, root, total) in [
+        (b.batch_id, b.root.clone(), b.total + 1),
+        (b.batch_id, b.root.clone(), b.total - 1),
+        (b.batch_id + 1, b.root.clone(), b.total),
+        (b.batch_id, BytesN::from_array(&s.env, &other_root), b.total),
+    ] {
+        let result = s.vault.try_fund_batch(
+            &s.funder,
+            &batch_id,
+            &s.token.address,
+            &root,
+            &total,
+            &b.proof,
+        );
+        assert_eq!(result, Err(Ok(VaultError::InvalidProof)));
+        assert_eq!(s.vault.get_batch(&batch_id), None);
+    }
+    assert_eq!(s.token.balance(&s.vault.address), 0);
+}
+
+#[test]
+fn manipulated_real_proof_is_rejected() {
+    let s = deploy_with_real_conservation_verifier();
+    let b = &s.batch;
+    let fund = |proof: &Bytes| {
+        s.vault.try_fund_batch(
+            &s.funder,
+            &b.batch_id,
+            &s.token.address,
+            &b.root,
+            &b.total,
+            proof,
+        )
+    };
+
+    // Valid curve points in the wrong places: the pairing check fails
+    let mut swapped = b.proof.slice(192..256);
+    swapped.append(&b.proof.slice(64..192));
+    swapped.append(&b.proof.slice(0..64));
+    assert_eq!(fund(&swapped), Err(Ok(VaultError::InvalidProof)));
+
+    // Wrong length: the verifier refuses it before any curve arithmetic
+    let mut short = b.proof.clone();
+    short.pop_back();
+    assert_eq!(fund(&short), Err(Ok(VaultError::InvalidProof)));
+
+    // A point that is not on the curve: the host's pairing functions abort the call
+    let mut off_curve = b.proof.clone();
+    off_curve.set(63, off_curve.get(63).unwrap() ^ 1);
+    assert!(fund(&off_curve).is_err());
+
+    assert_eq!(s.vault.get_batch(&b.batch_id), None);
+    assert_eq!(s.token.balance(&s.funder), b.total);
 }
 
 // ---------------------------------------------------------------------------
