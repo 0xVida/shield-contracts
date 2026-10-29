@@ -14,3 +14,5 @@ soroban-sdk = { workspace = true }
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
 serde_json = "1"
+# Real Groth16 verifier, for tests that register a batch with a real conservation proof
+shield-verifier = { path = "../shield-verifier" }

@@ -1,0 +1,41 @@
+{
+  "description": "Nullifier vectors: nullifier = Poseidon(domain, secret, leafIndex), circomlib parameters over BN254, where domain is the ASCII string \"shieldzk.nullifier\" read as a big-endian integer. secret is a decimal string; the nullifier is given as 32-byte big-endian hex (the vault's BytesN<32>) and as decimal. Produced by circuits/scripts/generate-test-vectors.js and checked by circuits/test/vectors.test.js.",
+  "domain": "0x0000000000000000000000000000736869656c647a6b2e6e756c6c6966696572",
+  "vectors": [
+    {
+      "name": "first leaf",
+      "secret": "111111111",
+      "leafIndex": 0,
+      "nullifier": "0x30128a873ad453f032bc29b9950c02a2d26aa9bc31b9c565771047e85037def0",
+      "nullifierDecimal": "21743776065946914264911546924655879584278745565967240103425895995024717897456"
+    },
+    {
+      "name": "second leaf, same secret",
+      "secret": "111111111",
+      "leafIndex": 1,
+      "nullifier": "0x22343ad9f2bb06f698bf9e69d11e703140d45fa84adb18d7725c9a8f76aabc46",
+      "nullifierDecimal": "15470919076358586925606140187893993938105466924022171232961996767337917365318"
+    },
+    {
+      "name": "last leaf at depth 10 (1023)",
+      "secret": "111111111",
+      "leafIndex": 1023,
+      "nullifier": "0x1d4ce8273715353ef1f593942ea9d50112dbf0c4ea305b81e84df710f8a115ad",
+      "nullifierDecimal": "13252955248229158405074427390857777404161182630233539266834796463999651222957"
+    },
+    {
+      "name": "largest secret (p - 1)",
+      "secret": "21888242871839275222246405745257275088548364400416034343698204186575808495616",
+      "leafIndex": 5,
+      "nullifier": "0x2b26c89655ea76258cfff7434ebc314ca1f1b2dc49bdd70957db5094961d718d",
+      "nullifierDecimal": "19517977079851388152760505208643577317635092392251047680254119246344436412813"
+    },
+    {
+      "name": "248-bit secret, like generateSecret()",
+      "secret": "189855338729543752940082719582767125844295116985445321106622421746716595751",
+      "leafIndex": 7,
+      "nullifier": "0x1b482084bf4e9c388dc5a59b9316339c72cd6e10f41eb9d0861c96a7d92f54b3",
+      "nullifierDecimal": "12339884335155279604626429067425587693799296494356407827101956060594264036531"
+    }
+  ]
+}

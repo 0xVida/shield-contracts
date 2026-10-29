@@ -8,6 +8,7 @@
     "test": "mocha --exit test/*.test.js",
     "setup:conservation": "bash scripts/groth16-setup.sh test_conservation 13",
     "vectors": "node scripts/generate-test-vectors.js",
+    "fixture:conservation": "node scripts/export-conservation-fixture.js",
     "test:conservation": "mocha --exit test/conservation.test.js",
     "compile:conservation-main": "bash scripts/groth16-setup.sh conservation_main"
   },

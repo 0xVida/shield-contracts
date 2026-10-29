@@ -48,6 +48,10 @@ function generateSecret() {
  * circuit will: amounts must fit in 64 bits and secrets must be field elements. The batch ID
  * must also fit in a u64, the vault's batch id type, or the batch could never be registered.
  *
+ * Secrets must also be distinct, which the circuit can't check. A recipient whose secret is
+ * shared with their Merkle-path neighbour could claim the neighbour's allocation as well: the
+ * neighbour's leaf is in their own path, so only the amount is left to guess.
+ *
  * allocations: [{ amount, secret }] in tree order; empty slots are filled in automatically.
  * depth: tree depth of the compiled circuit (10 in production, 3 in tests).
  *
@@ -59,12 +63,18 @@ async function buildConservationInput({ allocations, batchId, depth }) {
     if (id < 0n || id > MAX_BATCH_ID) {
         throw new RangeError(`batchId ${id} does not fit in a u64, the vault's batch id type`);
     }
+    const secrets = new Set();
     allocations.forEach(({ amount, secret }, i) => {
         const value = BigInt(amount);
         if (value < 0n || value > MAX_AMOUNT) {
             throw new RangeError(`Allocation ${i}: amount ${value} does not fit in 64 bits`);
         }
-        checkFieldElement(`Allocation ${i}: secret`, BigInt(secret));
+        const s = BigInt(secret);
+        checkFieldElement(`Allocation ${i}: secret`, s);
+        if (secrets.has(s)) {
+            throw new RangeError(`Allocation ${i}: secret is already used by another allocation`);
+        }
+        secrets.add(s);
     });
     return buildConservationInputUnchecked({ allocations, batchId, depth });
 }
