@@ -602,6 +602,24 @@ fn double_claim_with_same_nullifier_is_rejected() {
 }
 
 #[test]
+fn double_claim_is_reported_as_such_when_the_batch_is_nearly_drained() {
+    // The second claim would also overdraw the batch, but the nullifier is the
+    // real reason it fails, so that's the error the claimant should see
+    let s = setup();
+    let recipient = Address::generate(&s.env);
+    let n = nullifier(&s.env, 1);
+
+    s.vault
+        .withdraw(&BATCH_ID, &proof(&s.env), &n, &recipient, &6_000);
+    let result = s
+        .vault
+        .try_withdraw(&BATCH_ID, &proof(&s.env), &n, &recipient, &6_000);
+
+    assert_eq!(result, Err(Ok(VaultError::NullifierUsed)));
+    assert_eq!(s.token.balance(&recipient), 6_000);
+}
+
+#[test]
 fn replayed_nullifier_to_a_different_recipient_is_rejected() {
     let s = setup();
     let n = nullifier(&s.env, 1);
