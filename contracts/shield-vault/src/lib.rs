@@ -240,25 +240,29 @@ impl ShieldVault {
             return Err(VaultError::NonCanonicalNullifier);
         }
 
-        // 2. Batch must exist and have enough remaining funds
+        // 2. Batch must exist
         let batch_key = DataKey::Batch(batch_id);
         let mut batch: Batch = env
             .storage()
             .persistent()
             .get(&batch_key)
             .ok_or(VaultError::BatchNotFound)?;
-        let withdrawn = batch.withdrawn + amount;
-        if withdrawn > batch.total {
-            return Err(VaultError::InsufficientBatchFunds);
-        }
 
-        // 3. Nullifier must not have been used in this batch
+        // 3. Nullifier must not have been used in this batch. Checked before the
+        //    balance so that a double claim on a nearly drained batch is reported
+        //    as NullifierUsed, not as InsufficientBatchFunds.
         let nullifier_key = DataKey::Nullifier(batch_id, nullifier.clone());
         if env.storage().persistent().has(&nullifier_key) {
             return Err(VaultError::NullifierUsed);
         }
 
-        // 4. Verify the proof against the batch's stored root (never a caller-supplied
+        // 4. Batch must have enough remaining funds
+        let withdrawn = batch.withdrawn + amount;
+        if withdrawn > batch.total {
+            return Err(VaultError::InsufficientBatchFunds);
+        }
+
+        // 5. Verify the proof against the batch's stored root (never a caller-supplied
         //    root), in the circuit's public input order
         let mut public_inputs = Vec::new(&env);
         public_inputs.push_back(batch.root.clone());
@@ -271,7 +275,7 @@ impl ShieldVault {
             return Err(VaultError::InvalidProof);
         }
 
-        // 5. Effects: mark the nullifier spent and record the withdrawal
+        // 6. Effects: mark the nullifier spent and record the withdrawal
         env.storage().persistent().set(&nullifier_key, &true);
         env.storage()
             .persistent()
@@ -287,7 +291,7 @@ impl ShieldVault {
             .instance()
             .extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
 
-        // 6. Interaction: pay the recipient from the vault's balance
+        // 7. Interaction: pay the recipient from the vault's balance
         TokenClient::new(&env, &batch.token).transfer(
             &env.current_contract_address(),
             &recipient,
